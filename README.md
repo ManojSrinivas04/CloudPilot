@@ -1,147 +1,176 @@
-# FinOps AI - Cloud Cost Optimizer
+# CloudPilot
 
-FinOps AI is an AI-powered cloud cost optimization system that predicts the cloud compute resources (vCPU, RAM) required for an application based on its workload characteristics, and recommends the most suitable and cost-effective virtual machine (VM) instance across AWS, Azure, and GCP, along with estimated cloud costs.
-
----
+CloudPilot is a cloud cost optimization platform that uses workload characteristics and a trained Random Forest model to recommend resource configurations. It evaluates bundled multi-cloud pricing data to compare estimated costs across AWS, Azure, and GCP.
 
 ## Features
 
-- **Workload Resource Prediction:** Predicts required vCPU and RAM capacity using a trained Machine Learning model.
-- **Cheapest VM Recommendation:** Evaluates and recommends the cheapest suitable VM from AWS, Azure, and GCP instance catalogs.
-- **Dynamic Cost Projection:** Estimates hourly, monthly, and yearly costs, combining VM compute rates and SSD block storage costs ($0.10/GB-month).
-- **FastAPI Backend Integration:** Scalable REST API with Pydantic validation and interactive auto-generated Swagger docs.
-- **Streamlit Dashboard Frontend:** Modern, clean, dark-themed user interface with interactive sliders and visual metric cards.
+- JWT authentication with protected API operations.
+- User-owned resource create, read, update, and delete operations.
+- Hourly, monthly, and yearly resource cost estimation, including storage.
+- Random Forest prediction of required vCPU and RAM.
+- Multi-cloud pricing comparison across AWS, Azure, and GCP catalog data.
+- Persisted recommendation history scoped to the authenticated user.
+- Responsive React dashboard with login, registration, and dashboard views.
+- Docker and Docker Compose support for the PostgreSQL development environment.
 
----
+## Architecture
+
+```text
+React + TypeScript
+        |
+      REST
+        |
+     FastAPI
+      /    \
+PostgreSQL  ML + Pricing
+               |
+        AWS / Azure / GCP
+```
+
+- **Frontend:** The React and TypeScript application collects user input, manages authentication state, and calls the REST API.
+- **API:** FastAPI validates requests, applies JWT access control, and coordinates resources, costs, and recommendations.
+- **Database:** PostgreSQL stores users, owned resources, and recommendation history through SQLAlchemy.
+- **ML and pricing:** The Random Forest artifact predicts vCPU and RAM. Catalog services then match suitable VM and storage configurations and calculate estimated costs for the supported providers.
+
+## Tech Stack
+
+**Frontend:**
+- React
+- TypeScript
+
+**Backend:**
+- Python
+- FastAPI
+- SQLAlchemy
+- REST APIs
+- JWT
+
+**Database:**
+- PostgreSQL
+
+**Machine Learning:**
+- Scikit-learn
+- Random Forest
+
+**Infrastructure:**
+- Docker
+- Docker Compose
+
+## How It Works
+
+### Recommendation flow
+
+1. The user provides workload characteristics such as application type, user volume, concurrency, storage, region, and traffic pattern.
+2. The Random Forest model predicts the required vCPU and RAM.
+3. The pricing engine evaluates suitable VM and storage configurations across AWS, Azure, and GCP.
+4. The system compares estimated hourly, monthly, and yearly costs and identifies the cheapest suitable option.
+5. A recommendation can be stored for the authenticated user and viewed later through recommendation history.
+
+### Resource cost flow
+
+An authenticated user creates or updates a resource with its provider, region, capacity, storage, and hourly cost. The cost service combines the hourly compute estimate with the provider's catalog storage rate, then returns monthly and yearly totals through the resource cost endpoint.
 
 ## Project Structure
 
 ```text
-FinOps_AI/
-│
-├── backend/                  # FastAPI Backend API
-│   ├── main.py               # API routing, CORS middleware, and inference endpoint
-│   └── schemas.py            # Pydantic validation schemas for requests/responses
-│
-├── frontend/                 # Streamlit UI Dashboard
-│   └── app.py                # Dashboard inputs, API calls, and metric cards
-│
-├── datasets/                 # Training Dataset
-│   └── ml_training_dataset_v3_cleaned.csv
-│
-├── jupyter/                  # ML Development Notebooks
-│   ├── 01_EDA.ipynb          # Exploratory Data Analysis
-│   ├── 02_Preprocessing.ipynb# Data preprocessing and cleaning
-│   ├── 03_ModelTraining.ipynb# Model training
-│   ├── 04_ModelTesting.ipynb # Model verification
-│   └── 05_ModelVisualization.ipynb # Feature importances and visualization
-│
-├── ml/                       # ML Prediction Module
-│   ├── predict.py            # Inference runner and cost estimation formula
-│   ├── preprocess.py         # One-hot encoder aligning user inputs
-│   └── vm_catalog.csv        # Cloud instance spec and pricing catalog
-│
-├── models/                   # Trained ML Models
-│   ├── cloud_model.pkl       # Saved RandomForest model
-│   └── model_features.pkl    # Saved model feature column mappings
-│
-├── requirements.txt          # Python dependencies
-└── README.md                 # Project documentation
+CloudPilot/
+├── backend/
+│   └── app/                 # FastAPI app, API routes, models, schemas, and services
+├── frontend/
+│   └── web/                 # Vite React + TypeScript frontend
+├── ml/                      # Preprocessing, VM/storage catalogs, and region pricing
+├── models/                  # cloud_model.pkl and model_features.pkl
+├── datasets/                # Training dataset
+├── tests/                   # Backend unit and API tests
+├── docker-compose.yml       # PostgreSQL development service
+├── requirements.txt         # Python dependencies
+└── .env.example             # Local environment variable template
 ```
 
----
+## API Overview
 
-## Technology Stack
+The current FastAPI application mounts these routes under `/api`:
 
-- **Backend:** FastAPI, Uvicorn, Pydantic
-- **Frontend:** Streamlit, Requests
-- **Machine Learning:** Scikit-learn, Pandas, NumPy, Joblib, Matplotlib
+| Area | Routes | Purpose |
+| --- | --- | --- |
+| Authentication | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me` | Register, authenticate, and retrieve the current user. |
+| Resources | `POST /api/resources`, `GET /api/resources`, `GET /api/resources/{resource_id}`, `PATCH /api/resources/{resource_id}`, `DELETE /api/resources/{resource_id}` | Manage resources owned by the authenticated user. |
+| Resource cost | `GET /api/resources/{resource_id}/cost` | Calculate estimated costs for an owned resource. |
+| Recommendations | `POST /api/recommendations`, `GET /api/recommendations`, `GET /api/recommendations/{recommendation_id}` | Create and retrieve user-scoped recommendation history. |
+| Prediction | `POST /api/predict`, `POST /api/predict/compare` | Predict resource needs and recommend or compare suitable cloud configurations. |
+| Supported options | `GET /api/supported-options` | Return supported application types, regions, and traffic patterns. |
+| Health check | `GET /health` | Report API health and version. |
 
----
+Interactive API documentation is available at `/docs` when the backend is running.
 
-## Installation & Setup
+## Running Locally
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/MilinManu/Finops_AI.git
-cd Finops_AI
-```
+### Docker Compose setup
 
-### 2. Install Dependencies
-Make sure you have Python 3.11+ installed, then run:
-```bash
-pip install -r requirements.txt
-```
+Docker Compose currently provides the PostgreSQL database only. The FastAPI backend and React/Vite frontend run separately as local development processes.
 
----
+1. Clone the repository and enter its directory:
 
-## How to Run
+   ```bash
+   git clone <repository-url>
+   cd Finops_AI
+   ```
 
-To run the application, you will need to start both the backend API and the frontend dashboard in separate terminal windows.
+2. Copy `.env.example` to `.env` and replace placeholder values, especially `POSTGRES_PASSWORD` and `JWT_SECRET_KEY`.
 
-### Step 1: Start the FastAPI Backend
-From the project root directory, run:
-```bash
-python -m uvicorn backend.main:app --reload
-```
-- **API Base URL:** `http://127.0.0.1:8000`
-- **Interactive Swagger Docs:** `http://127.0.0.1:8000/docs`
-- **Alternative ReDoc Docs:** `http://127.0.0.1:8000/redoc`
+   ```bash
+   cp .env.example .env
+   ```
 
-### Step 2: Start the Streamlit Frontend
-From the project root directory in a new terminal, run:
-```bash
-streamlit run frontend/app.py
-```
-- **Streamlit Local URL:** `http://localhost:8501`
+3. Start the Compose services:
 
----
+   ```bash
+   docker compose up
+   ```
 
-## API Specifications
+   PostgreSQL starts on `127.0.0.1:5432`; no backend or frontend containers are defined in the current Compose file.
 
-### `POST /api/predict`
-Queries the prediction engine to evaluate required resources and recommend a VM.
+4. Start the backend in a second terminal:
 
-**Request Body (`PredictionRequest`):**
-```json
-{
-  "application_type": "E-Commerce",
-  "expected_users_per_day": 25000,
-  "concurrent_users": 600,
-  "storage_required_gb": 300,
-  "deployment_region": "ap-south-1",
-  "traffic_pattern": "High"
-}
-```
+   ```bash
+   python -m uvicorn backend.app.main:app --reload
+   ```
 
-**Response Body (`PredictionResponse`):**
-```json
-{
-  "predicted_vcpu": 2,
-  "predicted_ram_gb": 4,
-  "cloud_provider": "GCP",
-  "recommended_vm": "e2-medium",
-  "price_per_hour_usd": 0.033,
-  "monthly_cost_usd": 53.76,
-  "yearly_cost_usd": 645.12
-}
-```
+5. Start the frontend in a third terminal:
 
----
+   ```bash
+   cd frontend/web
+   npm install
+   npm run dev
+   ```
 
-## Cost Calculation Architecture
+   Open the frontend at `http://127.0.0.1:5173`. The Vite port can be overridden with its `--port` option, and the API base URL can be set with `VITE_API_BASE_URL`. Backend database and JWT settings are configured through `.env`.
 
-The total monthly cost is computed by combining:
-1. **VM Compute Rate:** The hourly instance rate fetched from the `vm_catalog.csv` catalog, mapped to 720 hours/month ($24 \text{ hours} \times 30 \text{ days}$).
-2. **SSD Storage Volume Rate:** Evaluated at a standard SSD block storage rate of **$0.10/GB per month**.
+### Non-Docker option
 
-$$\text{Total Monthly Cost} = (\text{VM Hourly Price} \times 24 \times 30) + (\text{Storage Required (GB)} \times \$0.10)$$
+The backend requires PostgreSQL. With PostgreSQL already running and `DATABASE_URL` configured in `.env`, start the backend and frontend using the commands above without running Compose.
 
----
+## Testing
 
-## Future Enhancements
+The project verification includes:
 
-- **Model Retraining & Fine-tuning:** Incorporate and tune feature weights (like concurrent users and region coefficients) in the RandomForest training dataset to distribute prediction weights beyond `expected_users_per_day`.
-- **Real-Time Pricing APIs:** Integrate cloud provider pricing APIs (e.g., AWS Price List API) to pull live, region-specific VM pricing.
-- **Kubernetes Optimization:** Add recommendation support for container pods and Kubernetes autoscaling limits.
-- **Multi-Cloud Comparison:** Show side-by-side cost comparisons for the same workload on AWS vs Azure vs GCP.
+- 32 backend `unittest` tests.
+- Frontend production build with `npm run build`.
+- Docker container health checks.
+- SQLAlchemy/PostgreSQL connectivity check.
+- End-to-end browser workflow covering registration, login, resource creation, cost retrieval, recommendation generation and history, and logout.
+- Responsive checks across desktop and mobile viewports.
+
+These checks do not represent 100% test coverage.
+
+## Machine Learning
+
+The model artifact is a Random Forest regressor. It uses workload characteristics to predict required vCPU and RAM; it does not directly predict cloud provider pricing. The pricing engine separately evaluates suitable configurations from the AWS, Azure, and GCP catalog data. The artifact is loaded with scikit-learn; the inference environment should match the artifact's training version for reproducible results.
+
+## Future Improvements
+
+- Use larger real-world workload and pricing datasets.
+- Improve recommendation accuracy.
+- Add more comprehensive automated testing.
+- Add application logging and monitoring.
+- Improve dashboard comparison of current versus recommended configuration.

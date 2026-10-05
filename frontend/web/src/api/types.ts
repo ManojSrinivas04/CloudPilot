@@ -1,0 +1,16 @@
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: "bearer";
+  user: User;
+}
+
+export interface ApiErrorBody {
+  detail?: string;
+}
